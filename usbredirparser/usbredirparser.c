@@ -955,7 +955,7 @@ int usbredirparser_do_read(struct usbredirparser *parser_pub)
 
     /* Skip forward to next packet (only used in error conditions) */
     while (parser->to_skip > 0) {
-        uint8_t buf[65536];
+        uint8_t buf[512];
         r = (parser->to_skip > sizeof(buf)) ? sizeof(buf) : parser->to_skip;
         r = parser->callb.read_func(parser->callb.priv, buf, r);
         if (r <= 0)
