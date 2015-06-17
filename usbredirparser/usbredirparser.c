@@ -1080,8 +1080,14 @@ int usbredirparser_do_write(struct usbredirparser *parser_pub)
 
         /* See usbredirparser_write documentation */
         if ((parser->flags & usbredirparser_fl_write_cb_owns_buffer) &&
-                w != wbuf->len)
+                w != wbuf->len) {
+#if ! defined(__KERNEL__)
             abort();
+#else
+            ret = -1;
+            break;
+#endif
+        }
 
         wbuf->pos += w;
         if (wbuf->pos == wbuf->len) {
