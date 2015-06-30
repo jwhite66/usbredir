@@ -64,6 +64,7 @@ usbredirhost/libusbredirhost.pc
 usbredirparser/Makefile
 usbredirparser/libusbredirparser-0.5.pc
 usbredirserver/Makefile
+connectkernel/Makefile
 usbredirtestclient/Makefile
 ])
 AC_OUTPUT
