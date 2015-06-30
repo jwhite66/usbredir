@@ -1,6 +1,6 @@
 SUBDIRS = usbredirparser usbredirhost
 if ! OS_WIN32
-SUBDIRS += usbredirserver connectkernel usbredirtestclient
+SUBDIRS += usbredirserver connectkernel usbredirtestclient usbredirtestserver
 endif
 
 EXTRA_DIST = README.multi-thread usb-redirection-protocol.txt
