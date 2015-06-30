@@ -1,0 +1,33 @@
+.TH CONNECTKERNEL "1" "July 2015" "connectkernel" "User Commands"
+.SH NAME
+connectkernel\- registering an exported USB device with a kernel running usbredir
+.SH SYNOPSIS
+.B connectkernel
+devid server port [\fI--attach <sysfs_file>\fR]
+.SH DESCRIPTION
+connectkernel is a small standalone utility which will connect to a
+remote usbredirserver and give the connection handle to the linux
+kernel, thereby importing the remote device into the running linux kernel.
+.PP
+You need to specify a unique identifier for the remote device, and a
+server and port where the device can be found.
+.PP
+Notice that an invocation of connectkernel can only be used to export a
+single USB device. If you want to connect multiple devices you will need
+to invoke it once for each remote device.
+.SH OPTIONS
+.TP
+\fB\-\-attach\fR \fIFILE\fR
+Set the file to write socket and devid to \fIFILE\fR.  The default
+is /sys/bus/platform/drivers/usbredir/attach.
+.SH AUTHOR
+Written by Jeremy White <jwhite@codeweavers.com>
+.SH REPORTING BUGS
+Report bugs to the spice-devel mailinglist:
+http://lists.freedesktop.org/mailman/listinfo/spice-devel
+.SH COPYRIGHT
+Copyright 2015 CodeWeavers, Inc.
+License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl.html>.
+.br
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
