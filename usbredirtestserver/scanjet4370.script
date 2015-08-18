@@ -1,0 +1,63 @@
+# This script should provide the basic information
+#  Necessary to plug a simulated HP Scanjet 4370
+#  into a remote host
+interface 0 0:ff:0:ff
+endpoint 0 0:0:0:0:0
+endpoint 1 ff:0:0:0:0
+endpoint 2 2:0:0:200:0
+endpoint 3 ff:0:0:0:0
+endpoint 4 ff:0:0:0:0
+endpoint 5 ff:0:0:0:0
+endpoint 6 ff:0:0:0:0
+endpoint 7 ff:0:0:0:0
+endpoint 8 ff:0:0:0:0
+endpoint 9 ff:0:0:0:0
+endpoint 10 ff:0:0:0:0
+endpoint 11 ff:0:0:0:0
+endpoint 12 ff:0:0:0:0
+endpoint 13 ff:0:0:0:0
+endpoint 14 ff:0:0:0:0
+endpoint 15 ff:0:0:0:0
+endpoint 16 0:0:0:0:0
+endpoint 17 2:0:0:200:0
+endpoint 18 ff:0:0:0:0
+endpoint 19 3:c:0:1:0
+endpoint 20 ff:0:0:0:0
+endpoint 21 ff:0:0:0:0
+endpoint 22 ff:0:0:0:0
+endpoint 23 ff:0:0:0:0
+endpoint 24 ff:0:0:0:0
+endpoint 25 ff:0:0:0:0
+endpoint 26 ff:0:0:0:0
+endpoint 27 ff:0:0:0:0
+endpoint 28 ff:0:0:0:0
+endpoint 29 ff:0:0:0:0
+endpoint 30 ff:0:0:0:0
+endpoint 31 ff:0:0:0:0
+device 2:0:0:0:3f0:4105:100
+expect ctrl 80:6:80:0:100:0:40
+ctrl 80:6:80:0:100:0:12 12 01 00 02 00 00 00 40 f0 03 05 41 00 01 01 02 03 01
+expect ctrl 80:6:80:0:100:0:12
+ctrl 80:6:80:0:100:0:12 12 01 00 02 00 00 00 40 f0 03 05 41 00 01 01 02 03 01
+expect ctrl 80:6:80:0:200:0:9
+ctrl 80:6:80:0:200:0:9 09 02 27 00 01 01 04 e0 01
+expect ctrl 80:6:80:0:200:0:27
+ctrl 80:6:80:0:200:0:27 09 02 27 00 01 01 04 e0 01 09 04 00 00 03 ff 00 ff 05 07 05 81 02 00 02 00 07 05 02 02 00 02 00 07 05 83 03 01 00 0c
+expect ctrl 80:6:80:0:300:0:ff
+ctrl 80:6:80:0:300:0:4 04 03 09 04
+expect ctrl 80:6:80:0:302:409:ff
+ctrl 80:6:80:0:302:409:16 16 03 68 00 70 00 20 00 73 00 63 00 61 00 6e 00 6a 00 65 00 74 00
+expect ctrl 80:6:80:0:301:409:ff
+ctrl 80:6:80:0:301:409:20 20 03 68 00 65 00 77 00 6c 00 65 00 74 00 74 00 20 00 70 00 61 00 63 00 6b 00 61 00 72 00 64 00
+expect ctrl 80:6:80:0:303:409:ff
+ctrl 80:6:80:0:303:409:1e 1e 03 43 00 4e 00 36 00 33 00 57 00 41 00 32 00 33 00 57 00 34 00 30 00 34 00 43 00 4d 00
+expect ctrl 0:9:0:0:1:0:0
+ctrl 0:9:0:0:1:0:0
+expect ctrl 80:6:80:0:304:409:ff
+ctrl 80:6:80:0:304:409:18 18 03 55 00 53 00 42 00 20 00 53 00 43 00 41 00 4e 00 4e 00 45 00 52 00
+expect ctrl 80:6:80:0:305:409:ff
+ctrl 80:6:80:0:305:409:4e 4e 03 42 00 75 00 6c 00 6b 00 2d 00 49 00 6e 00 2c 00 20 00 42 00 75 00 6c 00 6b 00 2d 00 4f 00 75 00 74 00 2c 00 20 00 49 00 6e 00 74 00 65 00 72 00 72 00 75 00 70 00 74 00 20 00 49 00 6e 00 74 00 65 00 72 00 66 00 61 00 63 00 65 00
+expect ctrl 80:6:80:0:302:409:ff
+ctrl 80:6:80:0:302:409:16 16 03 68 00 70 00 20 00 73 00 63 00 61 00 6e 00 6a 00 65 00 74 00
+expect ctrl 80:6:80:0:303:409:ff
+ctrl 80:6:80:0:303:409:1e 1e 03 43 00 4e 00 36 00 33 00 57 00 41 00 32 00 33 00 57 00 34 00 30 00 34 00 43 00 4d 00
