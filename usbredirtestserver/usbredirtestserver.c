@@ -79,10 +79,28 @@ typedef struct {
     int data_len;
 } expect_ctrl_t;
 
+#define MAX_LABELS  10
+#define BUFFER_SIZE 65536
+typedef struct {
+    char buffer[BUFFER_SIZE];
+    int fd;
+    int read_into;
+    int read_from;
+    int prompted;
+
+    char *labels[MAX_LABELS];
+    int label_positions[MAX_LABELS];
+} command_buffer_t;
+
+static command_buffer_t *new_command_buffer(char *fname);
+static int command_buffer_read(command_buffer_t *cmd);
+static char * command_buffer_get(command_buffer_t *cmd);
+static void free_command_buffer(command_buffer_t *cmd);
+
 typedef struct {
     int id;
     int fd;
-    int cmd_fd;
+    command_buffer_t *cmd;
     struct usbredirparser *parser;
     struct usb_redir_interface_info_header interface_info;
     struct usb_redir_ep_info_header ep_info;
@@ -149,71 +167,30 @@ static void usage(int exit_code, char *argv0)
 
 static void usbredirtestserver_cmdline_parse(private_info_t *info, char *buf);
 
-static int read_cmd(private_info_t *info, char *buf, int buf_size, int *pos)
-{
-    char *p;
-    int rc;
-
-    if (info->cmd_fd != -1 && *pos < buf_size) {
-        memset(buf + *pos, 0, buf_size - *pos);
-        rc = read(info->cmd_fd, buf + *pos, buf_size - *pos);
-        if (rc == 0) {
-            close(info->cmd_fd);
-            info->cmd_fd = -1;
-        }
-
-        if (rc < 0)
-            return rc;
-
-        *pos += rc;
-    }
-
-    while (*pos > 0 && ! info->expect_ctrl) {
-        p = strchr(buf, '\n');
-        if (!p && info->cmd_fd == -1)
-            p = buf + strlen(buf);
-
-        if (p) {
-            *p = '\0';
-            usbredirtestserver_cmdline_parse(info, buf);
-            *pos -= (p - buf + 1);
-            memmove(buf, p + 1, *pos);
-            *(buf + *pos) = 0;
-            if (info->cmd_fd == STDIN_FILENO)
-                printf("%d> ", info->id); fflush(stdout);
-        }
-    }
-
-    return 0;
-}
 
 static void run_main_loop(private_info_t *info)
 {
-    char buf[1024];
-    int pos = 0;
     fd_set readfds, writefds;
     int n, nfds;
     struct timeval tv;
 
-    printf("device %d connected\n", info->id);
-
-    if (info->cmd_fd == STDIN_FILENO)
-        printf("%d> ", info->id); fflush(stdout);
+    printf("device %d connected, fd %d\n", info->id, info->fd);
+    printf("running %d\n", running);
 
     while (running && info->fd != -1) {
         FD_ZERO(&readfds);
         FD_ZERO(&writefds);
 
-        if (info->cmd_fd != -1)
-            FD_SET(info->cmd_fd, &readfds);
+        if (info->cmd->fd != -1)
+            FD_SET(info->cmd->fd, &readfds);
 
         FD_SET(info->fd, &readfds);
         if (usbredirparser_has_data_to_write(info->parser)) {
             FD_SET(info->fd, &writefds);
         }
         nfds = info->fd + 1;
-        if (info->cmd_fd > info->fd)
-            nfds = info->cmd_fd + 1;
+        if (info->cmd->fd > info->fd)
+            nfds = info->cmd->fd + 1;
 
         tv.tv_sec = 0;
         tv.tv_usec = 1000;
@@ -226,10 +203,17 @@ static void run_main_loop(private_info_t *info)
             break;
         }
 
-        if ( (info->cmd_fd != -1 && FD_ISSET(info->cmd_fd, &readfds)) ||
-                pos > 0) {
-            if (read_cmd(info, buf, sizeof(buf), &pos))
+        if ( (info->cmd->fd != -1 && FD_ISSET(info->cmd->fd, &readfds))) {
+            if (command_buffer_read(info->cmd) < 0)
                 break;
+        }
+
+        while (! info->expect_ctrl) {
+            char *command = command_buffer_get(info->cmd);
+            if (! command)
+                break;
+            usbredirtestserver_cmdline_parse(info, command);
+            free(command);
         }
 
         if (FD_ISSET(info->fd, &readfds)) {
@@ -261,15 +245,9 @@ void run_one_device(int fd, char *script_file, int id)
 
     memset(&private_info, 0, sizeof(private_info));
 
-    if (script_file) {
-        private_info.cmd_fd = open(script_file, O_RDONLY);
-        if (private_info.cmd_fd < 0) {
-            perror("open script");
-            exit(-2);
-        }
-    }
-    else
-        private_info.cmd_fd = STDIN_FILENO;
+    private_info.cmd = new_command_buffer(script_file);
+    if (! private_info.cmd)
+        exit(-1);
 
     flags = fcntl(fd, F_GETFL);
     if (flags == -1) {
@@ -874,4 +852,130 @@ static void usbredirtestserver_interrupt_packet(void *priv, uint64_t id,
     uint8_t *data, int data_len)
 {
     printf("Interrupt packet id %"PRIu64"\n", id);
+}
+
+/* Functions to track and manage a command buffer.
+   This complexity is largely the result of a desire to have
+   a 'goto' command */
+static command_buffer_t *new_command_buffer(char *script_file)
+{
+    command_buffer_t *cmd = malloc(sizeof(*cmd));
+    if (!cmd)
+        return NULL;
+
+    memset(cmd, 0, sizeof(*cmd));
+    if (script_file) {
+        cmd->fd = open(script_file, O_RDONLY);
+        if (cmd->fd < 0) {
+            perror("open script");
+            free(cmd);
+            return NULL;
+        }
+    }
+    else
+        cmd->fd = STDIN_FILENO;
+
+    return cmd;
+}
+
+static int command_buffer_read(command_buffer_t *cmd)
+{
+    int rc;
+    if (cmd->fd == -1)
+        return 0;
+
+    if (cmd->read_into >= sizeof(cmd->buffer) - 1) {
+        /* Our buffer is full... */
+        fprintf(stderr, "Error: buffer full.\n;");
+        exit(-3);
+    }
+
+    if (cmd->fd == STDIN_FILENO && ! cmd->prompted) {
+        printf("> ");
+        fflush(stdout);
+        cmd->prompted = 1;
+    }
+
+    rc = read(cmd->fd, cmd->buffer + cmd->read_into, sizeof(cmd->buffer) - cmd->read_into - 1);
+    if (rc < 0)
+        return rc;
+
+    if (rc == 0)
+        cmd->fd = -1;
+
+    cmd->read_into += rc;
+
+    return rc;
+}
+
+static int intercept_goto_and_labels(command_buffer_t *cmd, char *command)
+{
+    int i;
+
+    if (command[0] == ':') {
+        for (i = 0; i < MAX_LABELS; i++)
+            if (! cmd->labels[i]) {
+                cmd->labels[i] = strdup(command + 1);
+                cmd->label_positions[i] = cmd->read_from;
+                return 1;
+            }
+            /* If we already have this label, ignore it. */
+            else if (strcmp(cmd->labels[i], command + 1) == 0)
+                return 1;
+    }
+
+    if (strlen(command) > 5 && memcmp(command, "goto ", 5) == 0) {
+        for (i = 0; i < MAX_LABELS; i++)
+            if (cmd->labels[i] && strcmp(cmd->labels[i], command + 5) == 0) {
+                cmd->read_from = cmd->label_positions[i];
+                return 1;
+            }
+
+    }
+
+    return 0;
+}
+
+static char *command_buffer_get(command_buffer_t *cmd)
+{
+    char *p;
+    char *ret;
+    int len;
+
+    if (cmd->read_from >= cmd->read_into)
+        return NULL;
+
+    p = strchr(cmd->buffer + cmd->read_from, '\n');
+    if (!p && cmd->fd == -1)
+        p = cmd->buffer + cmd->read_into;
+
+    if (!p)
+        return NULL;
+
+    len = p - (cmd->buffer + cmd->read_from);
+
+    ret = malloc(len + 1);
+    if (! ret)
+        return NULL;
+
+    memcpy(ret, cmd->buffer + cmd->read_from, len);
+    ret[len] = 0;
+    cmd->prompted = 0;
+    cmd->read_from += len + 1;
+
+    if (intercept_goto_and_labels(cmd, ret)) {
+        free(ret);
+        return command_buffer_get(cmd);
+    }
+
+    return ret;
+}
+
+static void free_command_buffer(command_buffer_t *cmd)
+{
+    int i;
+    for (i = 0; i < MAX_LABELS; i++)
+        if (cmd->labels[i])
+            free(cmd->labels[i]);
+    free(cmd);
 }
