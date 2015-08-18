@@ -847,8 +847,10 @@ static void usbredirtestserver_control_packet(void *priv, uint64_t id,
     }
     printf("\n");
 
-    if (info->expect_ctrl)
+    if (info->expect_ctrl) {
         check_expect_ctrl(info, control_packet, data, data_len);
+        info->id = id;
+    }
 
     usbredirparser_free_packet_data(info->parser, data);
 }
