@@ -1,0 +1,24 @@
+USB Redirection Kernel Module
+
+This module allows a Linux system to instatiate USB devices
+that are located on a remote device.  The USB data is transferred
+over a socket using the USBREDIR protocol, which is generally
+used in conjunction with the SPICE project.
+
+You will need the USBREDIR user space tools.  They can
+be found at http://www.spice-space.org/page/UsbRedir.
+
+To use, start the usbredirserver on a remote system.
+For example,
+ ./usbredirserver --port 4000 125f:db8a
+will export my ADATA thumb drive on the remote system.
+
+Next, on the local system, build and insert the usbredir
+kernel module:
+  make && sudo modprobe ./usbredir.ko
+
+Finally, on the local system, connect a socket and relay that to
+the kernel module.  The connectkernel utility will do this as follows:
+  ./connectkernel adata4000 my.remote.device.com 4000
+
+The device should attach and be usable on the local system.

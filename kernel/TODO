@@ -1,0 +1,7 @@
+TODO:
+  *  dummy_hcd suspend/resume/timeout code is unclear
+     Need to study, figure out what we need, and if we
+     need a timer
+  *  Not obeying irq / spin lock rules correctly
+  *  Study dummy_hcd / usbip and mirror
+  *  Read and deal with the many TODOs
