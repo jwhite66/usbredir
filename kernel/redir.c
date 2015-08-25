@@ -141,6 +141,19 @@ static void redir_free_lock(void *lock)
 	kfree(lock);
 }
 
+static bool find_device(const char *list, int vendor, int id)
+{
+	const char *p;
+	char buf[24];
+
+	sprintf(buf, "%04x:%04x", vendor, id);
+
+	for (p = list; strlen(p) >= strlen(buf); p++)
+		if (strncasecmp(p, buf, strlen(buf)) == 0)
+			return true;
+
+	return false;
+}
 
 /* The below callbacks are called when a complete packet of the relevant
    type has been received.
@@ -154,6 +167,8 @@ static void redir_hello(void *priv, struct usb_redir_hello_header *hello)
 	pr_debug("Hello!\n");
 }
 
+extern char *whitelist;
+extern char *blacklist;
 static void redir_device_connect(void *priv,
 	struct usb_redir_device_connect_header *device_connect)
 {
@@ -164,6 +179,25 @@ static void redir_device_connect(void *priv,
 		device_connect->device_protocol);
 	pr_debug("  vendor 0x%04x product %04x\n",
 		device_connect->vendor_id, device_connect->product_id);
+
+	if (whitelist && ! find_device(whitelist, device_connect->vendor_id,
+			device_connect->product_id)) {
+		pr_err("Device %04x:%04x not in white list.\n",
+		device_connect->vendor_id, device_connect->product_id);
+		if (udev->socket)
+			kernel_sock_shutdown(udev->socket, SHUT_RDWR);
+		return;
+	}
+
+	if (blacklist && find_device(blacklist, device_connect->vendor_id,
+			device_connect->product_id)) {
+		pr_err("Device %04x:%04x in black list.\n",
+		device_connect->vendor_id, device_connect->product_id);
+		if (udev->socket)
+			kernel_sock_shutdown(udev->socket, SHUT_RDWR);
+		return;
+	}
+
 
 	spin_lock(&udev->lock);
 	udev->connect_header = *device_connect;

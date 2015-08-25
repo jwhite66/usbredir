@@ -88,6 +88,16 @@ module_param(devices_per_hub, uint, S_IRUSR|S_IWUSR);
 MODULE_PARM_DESC(devices_per_hub,
 		"Maximum number of devices per hub; default 16");
 
+char *whitelist = NULL;
+module_param(whitelist, charp, S_IRUSR|S_IWUSR);
+MODULE_PARM_DESC(whitelist,
+		"List of acceptable devices permitted to connect.");
+
+char *blacklist = NULL;
+module_param(blacklist, charp, S_IRUSR|S_IWUSR);
+MODULE_PARM_DESC(blacklist,
+		"List of devices not permitted to connect.");
+
 module_init(usbredir_main_init);
 module_exit(usbredir_main_exit);
 
