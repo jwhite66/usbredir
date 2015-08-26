@@ -13,6 +13,7 @@
 #define __USBREDIR_H
 
 #include <linux/device.h>
+#include <linux/timer.h>
 #include <linux/list.h>
 #include <linux/platform_device.h>
 #include <linux/usb.h>
@@ -49,6 +50,8 @@
  * @unlink_tx		A list of urb's to be send to be unlinked
  * @unlink_xx		A list of urb's we have requested cancellation of
  * @waitq_tx		Wait queue the transmit thread sleeps on
+ *
+ * @timer               A timer to clear stale URBs
  */
 struct usbredir_device {
 	spinlock_t lock;
@@ -84,6 +87,8 @@ struct usbredir_device {
 	struct list_head unlink_rx;
 
 	wait_queue_head_t waitq_tx;
+
+	struct timer_list timer;
 };
 
 /**
@@ -139,6 +144,7 @@ struct usbredir_urb {
  * @seqnum		Sequence number of this request
  * @list		Place holder to keep it in device/unlink_[rt]x
  * @unlink_seqnum	Sequence number of the urb to unlink
+ * @expires		When we should forcibly terminate this urb
  */
 struct usbredir_unlink {
 	int seqnum;
@@ -146,6 +152,7 @@ struct usbredir_unlink {
 	struct list_head list;
 
 	int unlink_seqnum;
+	unsigned long expires;
 };
 
 
@@ -208,6 +215,7 @@ int usbredir_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 int usbredir_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status);
 struct urb *usbredir_pop_rx_urb(struct usbredir_device *udev, int seqnum);
 void usbredir_urb_cleanup_urblists(struct usbredir_device *udev);
+void usbredir_cancel_urb(struct usbredir_device *udev, int seqnum);
 
 /* Fast lookup functions */
 static inline struct usbredir_hub *usbredir_hub_from_hcd(struct usb_hcd *hcd)

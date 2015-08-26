@@ -169,6 +169,8 @@ static void usbredir_free_uurb(struct usbredir_device *udev, struct urb *urb)
 	}
 }
 
+/* TODO - find justification for a timeout value; 250ms is pulled from air*/
+#define DEQUEUE_TIMEOUT		((250 * HZ) / 1000)
 int usbredir_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 {
 	struct usbredir_urb *uurb;
@@ -216,9 +218,13 @@ int usbredir_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 
 		unlink->seqnum = usbredir_hub_seqnum(hub);
 		unlink->unlink_seqnum = uurb->seqnum;
+		unlink->expires = jiffies + DEQUEUE_TIMEOUT;
 
 		/* TODO - are we failing to pass through the status here? */
 		spin_lock(&udev->lock);
+		if (! timer_pending(&udev->timer))
+			mod_timer(&udev->timer, unlink->expires);
+
 		list_add_tail(&unlink->list, &udev->unlink_tx);
 		spin_unlock(&udev->lock);
 
@@ -280,3 +286,13 @@ struct urb *usbredir_pop_rx_urb(struct usbredir_device *udev, int seqnum)
 
 	return urb;
 }
+
+void usbredir_cancel_urb(struct usbredir_device *udev, int seqnum)
+{
+	struct urb *urb = usbredir_pop_rx_urb(udev, seqnum);
+	if (urb) {
+		usb_hcd_unlink_urb_from_ep(udev->hub->hcd, urb);
+		usb_hcd_giveback_urb(udev->hub->hcd, urb, urb->status);
+	}
+}
+

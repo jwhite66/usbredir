@@ -21,6 +21,42 @@
 
 #include "usbredir.h"
 
+
+static void device_timer(unsigned long arg)
+{
+	struct usbredir_device *udev = (struct usbredir_device *) arg;
+	struct usbredir_unlink *unlink, *tmp;
+	unsigned long j = 0;
+	int dequeue = -1;
+	pr_debug("%ld(%d): device_timer\n", jiffies, udev->rhport);
+
+	if (! atomic_read(&udev->active))
+		return;
+
+	spin_lock(&udev->lock);
+
+	/* Dequeue at most one per invocation, so we can unlock */
+	list_for_each_entry_safe(unlink, tmp, &udev->unlink_rx, list) {
+		if (dequeue == -1 && time_after_eq(jiffies, unlink->expires)) {
+			dequeue = unlink->unlink_seqnum;
+			list_del(&unlink->list);
+			kfree(unlink);
+		}
+		else if (j == 0 || time_after(j, unlink->expires)) {
+			j = unlink->expires;
+		}
+	}
+
+	if (j)
+		mod_timer(&udev->timer, j);
+	spin_unlock(&udev->lock);
+
+	if (dequeue != -1) {
+		usbredir_cancel_urb(udev, dequeue);
+	}
+}
+
+
 void usbredir_device_init(struct usbredir_device *udev, int port,
 			  struct usbredir_hub *hub)
 {
@@ -37,6 +73,10 @@ void usbredir_device_init(struct usbredir_device *udev, int port,
 	INIT_LIST_HEAD(&udev->unlink_rx);
 
 	init_waitqueue_head(&udev->waitq_tx);
+
+	init_timer(&udev->timer);
+	udev->timer.data = (unsigned long) udev;
+	udev->timer.function = device_timer;
 }
 
 void usbredir_device_allocate(struct usbredir_device *udev,
@@ -92,6 +132,8 @@ void usbredir_device_deallocate(struct usbredir_device *udev,
 		atomic_inc(&udev->active);
 		return;
 	}
+
+	del_timer(&udev->timer);
 
 	/* Release the rx thread */
 	if (udev->socket)
