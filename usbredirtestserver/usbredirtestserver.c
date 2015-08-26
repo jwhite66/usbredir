@@ -133,6 +133,7 @@ static int usbredirtestserver_read(void *priv, uint8_t *data, int count)
         return -1;
     }
     if (r == 0) { /* Server disconnected */
+        fprintf(stderr, "read(%d) returns 0; closing.\n", info->fd);
         close(info->fd);
         info->fd = -1;
     }
@@ -148,6 +149,7 @@ static int usbredirtestserver_write(void *priv, uint8_t *data, int count)
         if (errno == EAGAIN)
             return 0;
         if (errno == EPIPE) { /* Server disconnected */
+            fprintf(stderr, "write(%d) returns EPIPE; closing.\n", info->fd);
             close(info->fd);
             info->fd = -1;
             return 0;
@@ -511,6 +513,7 @@ static void usbredirtestserver_cmdline_ctrl(private_info_t *info, char *buf)
     struct usb_redir_control_packet_header control_packet;
 
     if (parse_ctrl(buf, &control_packet, &data, &data_len)) {
+        fprintf(stderr, "Unable to parse ctrl; closing.\n");
         close(info->fd);
         info->fd = -1;
         return;
