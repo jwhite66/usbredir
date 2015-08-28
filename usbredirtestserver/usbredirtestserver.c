@@ -355,6 +355,8 @@ void run_one_device(int fd, char *script_file, int id)
 
     usbredirparser_destroy(parser);
 
+    free_command_buffer(private_info.cmd);
+
     exit(!running);
 }
 
@@ -461,7 +463,6 @@ int main(int argc, char *argv[])
     }
 
     while (running) {
-        int status;
         fd_set readfds;
         int nfds;
         struct timeval tv;
@@ -540,7 +541,7 @@ static int parse_ctrl(char *buf, struct usb_redir_control_packet_header *ctrl,
 
     *data = malloc(strlen(buf + pos1) + 1);
     if (!*data) {
-        fprintf(stderr, "Out of memory allocating %d!\n", strlen(buf + pos1) + 1);
+        fprintf(stderr, "Out of memory allocating %ld!\n", strlen(buf + pos1) + 1);
         return -2;
     }
     memset(*data, 0, strlen(buf + pos1) + 1);
@@ -610,8 +611,6 @@ static void usbredirtestserver_cmdline_expect(private_info_t *info, char *buf)
 
 static void usbredirtestserver_cmdline_device(private_info_t *info, char *buf)
 {
-    int i;
-
     memset(&info->device_connect, 0, sizeof(info->device_connect));
     if (7 != sscanf(buf, "%hhx:%hhx:%hhx:%hhx:%hx:%hx:%hx",
         &info->device_connect.speed,
