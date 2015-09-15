@@ -33,6 +33,10 @@ int usbredir_rx_loop(void *data)
 
 	pr_debug("%s exit\n", __func__);
 
+	spin_lock(&udev->lock);
+	udev->rx = NULL;
+	spin_unlock(&udev->lock);
+
 	usbredir_device_disconnect(udev);
 	usbredir_device_deallocate(udev, false, true);
 
