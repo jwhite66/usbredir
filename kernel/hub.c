@@ -305,6 +305,18 @@ static struct hc_driver usbredir_hc_driver = {
 };
 
 
+/* Older kernels required a -1 to indicate no irq line;
+ * This is an attempt to make this code handle both;
+ * we key off the fact that hcd.irq is signed in the old code */
+static int no_irq(void)
+{
+	struct usb_hcd hcd;
+	hcd.irq = -1;
+	if (hcd.irq > 0)
+		return 0;
+	return -1;
+}
+
 static int usbredir_create_hcd(struct usbredir_hub *hub)
 {
 	int ret;
@@ -320,7 +332,7 @@ static int usbredir_create_hcd(struct usbredir_hub *hub)
 
 	*((struct usbredir_hub **) hub->hcd->hcd_priv) = hub;
 
-	ret = usb_add_hcd(hub->hcd, 0, 0);
+	ret = usb_add_hcd(hub->hcd, no_irq(), 0);
 	if (ret != 0) {
 		pr_err("usb_add_hcd failed %d\n", ret);
 		usb_put_hcd(hub->hcd);
