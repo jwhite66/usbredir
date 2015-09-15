@@ -208,7 +208,8 @@ static void redir_device_connect(void *priv,
 
 static void redir_device_disconnect(void *priv)
 {
-	TODO_IMPLEMENT;
+	struct usbredir_device *udev = (struct usbredir_device *) priv;
+	usbredir_device_disconnect(udev);
 }
 
 static void redir_reset(void *priv)
