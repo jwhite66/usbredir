@@ -74,11 +74,21 @@ static int verbose = usbredirparser_info; /* 2 */
 static int running = 1;
 
 typedef struct {
+    struct usb_redir_control_packet_header ctrl;
+    unsigned char *data;
+    int data_len;
+} expect_ctrl_t;
+
+typedef struct {
     int id;
     int fd;
     int cmd_fd;
     struct usbredirparser *parser;
-} private_info_t ;
+    struct usb_redir_interface_info_header interface_info;
+    struct usb_redir_ep_info_header ep_info;
+    struct usb_redir_device_connect_header device_connect;
+    expect_ctrl_t *expect_ctrl;
+} private_info_t;
 
 static const struct option longopts[] = {
     { "port", required_argument, NULL, 'p' },
@@ -139,6 +149,44 @@ static void usage(int exit_code, char *argv0)
 
 static void usbredirtestserver_cmdline_parse(private_info_t *info, char *buf);
 
+static int read_cmd(private_info_t *info, char *buf, int buf_size, int *pos)
+{
+    char *p;
+    int rc;
+
+    if (info->cmd_fd != -1 && *pos < buf_size) {
+        memset(buf + *pos, 0, buf_size - *pos);
+        rc = read(info->cmd_fd, buf + *pos, buf_size - *pos);
+        if (rc == 0) {
+            close(info->cmd_fd);
+            info->cmd_fd = -1;
+        }
+
+        if (rc < 0)
+            return rc;
+
+        *pos += rc;
+    }
+
+    while (*pos > 0 && ! info->expect_ctrl) {
+        p = strchr(buf, '\n');
+        if (!p && info->cmd_fd == -1)
+            p = buf + strlen(buf);
+
+        if (p) {
+            *p = '\0';
+            usbredirtestserver_cmdline_parse(info, buf);
+            *pos -= (p - buf + 1);
+            memmove(buf, p + 1, *pos);
+            *(buf + *pos) = 0;
+            if (info->cmd_fd == STDIN_FILENO)
+                printf("%d> ", info->id); fflush(stdout);
+        }
+    }
+
+    return 0;
+}
+
 static void run_main_loop(private_info_t *info)
 {
     char buf[1024];
@@ -146,7 +194,6 @@ static void run_main_loop(private_info_t *info)
     fd_set readfds, writefds;
     int n, nfds;
     struct timeval tv;
-    int closed = 0;
 
     printf("device %d connected\n", info->id);
 
@@ -157,7 +204,7 @@ static void run_main_loop(private_info_t *info)
         FD_ZERO(&readfds);
         FD_ZERO(&writefds);
 
-        if (! closed)
+        if (info->cmd_fd != -1)
             FD_SET(info->cmd_fd, &readfds);
 
         FD_SET(info->fd, &readfds);
@@ -179,6 +226,12 @@ static void run_main_loop(private_info_t *info)
             break;
         }
 
+        if ( (info->cmd_fd != -1 && FD_ISSET(info->cmd_fd, &readfds)) ||
+                pos > 0) {
+            if (read_cmd(info, buf, sizeof(buf), &pos))
+                break;
+        }
+
         if (FD_ISSET(info->fd, &readfds)) {
             if (usbredirparser_do_read(info->parser)) {
                 break;
@@ -187,35 +240,6 @@ static void run_main_loop(private_info_t *info)
         if (FD_ISSET(info->fd, &writefds)) {
             if (usbredirparser_do_write(info->parser)) {
                 break;
-            }
-        }
-
-        if (!closed && FD_ISSET(info->cmd_fd, &readfds)) {
-            char *p;
-            int rc;
-            rc = read(info->cmd_fd, buf + pos, sizeof(buf) - pos);
-printf("JPW read rc %d\n", rc);
-
-            if (rc == 0)
-                closed++;
-
-            if (rc < 0)
-                break;
-
-            pos += rc;
-
-            while (pos > 0) {
-                p = strchr(buf, '\n');
-                if (!p)
-                    p = buf + pos;
-                if (p) {
-                    *p = '\0';
-                    usbredirtestserver_cmdline_parse(info, buf);
-                    pos -= (p - buf + 1);
-                    memmove(buf, p + 1, sizeof(buf) - pos);
-                    if (info->cmd_fd == STDIN_FILENO)
-                        printf("%d> ", info->id); fflush(stdout);
-                }
             }
         }
 
@@ -234,6 +258,8 @@ void run_one_device(int fd, char *script_file, int id)
     int parser_flags = usbredirparser_fl_usb_host;
     uint32_t caps[USB_REDIR_CAPS_SIZE] = { 0, };
     int flags;
+
+    memset(&private_info, 0, sizeof(private_info));
 
     if (script_file) {
         private_info.cmd_fd = open(script_file, O_RDONLY);
@@ -302,7 +328,7 @@ void run_one_device(int fd, char *script_file, int id)
         usbredirtestserver_stop_bulk_receiving;
 */
 
-    /* TODO - usbredirserver can do this; not sure if we want to...
+    /* TODO - usbredirserver can do this; not sure if we want to..
     if (flags & usbredirhost_fl_write_cb_owns_buffer) {
         parser_flags |= usbredirparser_fl_write_cb_owns_buffer;
     } */
@@ -338,7 +364,7 @@ int main(int argc, char *argv[])
     int id = 0;
     char *script_file = NULL;
 
-    while ((o = getopt_long(argc, argv, "hp:s:", longopts, NULL)) != -1) {
+    while ((o = getopt_long(argc, argv, "hp:s:v:", longopts, NULL)) != -1) {
         switch (o) {
         case 'p':
             port = strtol(optarg, &endptr, 10);
@@ -434,12 +460,6 @@ int main(int argc, char *argv[])
                 close(client_fd);
         }
 
-        if (waitpid(-1, &status, WNOHANG)) {
-            if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-                printf("Child exited abnormally; stopping.\n");
-                break;
-            }
-        }
     }
 
 
@@ -449,167 +469,197 @@ int main(int argc, char *argv[])
 static void usbredirtestserver_cmdline_help(void)
 {
     printf("Avaiable commands:\n"
-        "ctrl <endpoint> <request> <request_type> <value> <index> <length> [data]\n"
-        "device\n"
+        "interface n <val>:<class>:<subclass>:<protocol>\n"
+        "endpoint n <type>:<interval>:<interface>:<max_packet_size>:<max_streams>\n"
+        "device <speed>:<class>:<subclass>:<protocol>:<vendor>:<product>:<bcd>\n"
+        "ctrl <endpoint>:<request>:<request_type>:<value>:<index>:<length> [data]\n"
+        "expect ctrl ...\n"
         "kill\n"
         "quit\n"
         "help\n");
 }
 
+static int parse_ctrl(char *buf, struct usb_redir_control_packet_header *ctrl,
+                        unsigned char **data, int *data_len)
+{
+    int pos1 = 0;
+    int pos2 = 0;
+    int i;
+
+    memset(ctrl, 0, sizeof(*ctrl));
+    *data_len = 0;
+    *data = NULL;
+
+    if (7 != sscanf(buf, "%hhx:%hhx:%hhx:%hhx:%hx:%hx:%hx %n",
+                &ctrl->endpoint,
+                &ctrl->request,
+                &ctrl->requesttype,
+                &ctrl->status,
+                &ctrl->value,
+                &ctrl->index,
+                &ctrl->length,
+                &pos1)) {
+        fprintf(stderr, "Error scanning '%s'\n", buf);
+        return -1;
+    }
+
+    *data = malloc(strlen(buf + pos1) + 1);
+    if (!*data) {
+        fprintf(stderr, "Out of memory allocating %d!\n", strlen(buf + pos1) + 1);
+        return -2;
+    }
+    memset(*data, 0, strlen(buf + pos1) + 1);
+
+    for (i = 0; i < ctrl->length; i++) {
+        if (sscanf(buf + pos1, "%hhx %n", (*data) + i, &pos2) != 1) {
+            break;
+        }
+        pos1 += pos2;
+    }
+    *data_len = i;
+    if (i == 0) {
+        free(*data);
+        *data = NULL;
+    }
+
+    return 0;
+}
+
 static void usbredirtestserver_cmdline_ctrl(private_info_t *info, char *buf)
 {
-    struct usb_redir_control_packet_header control_packet;
-    char *arg, *endptr = NULL;
-    uint8_t *data = NULL;
+    unsigned char *data;
     int data_len;
-    char *dup = strdup(buf);
 
-    arg = strtok(dup, " \t\n");
-    if (arg) {
-        control_packet.endpoint = strtol(arg, &endptr, 0);
-    }
-    if (!arg || *endptr != '\0') {
-        printf("Missing or invalid endpoint\n");
-        goto out;
+    struct usb_redir_control_packet_header control_packet;
+
+    if (parse_ctrl(buf, &control_packet, &data, &data_len)) {
+        close(info->fd);
+        info->fd = -1;
+        return;
     }
 
-    arg = strtok(NULL, " \t\n");
-    if (arg) {
-        control_packet.request = strtol(arg, &endptr, 0);
-    }
-    if (!arg || *endptr != '\0') {
-        printf("Missing or invalid request\n");
-        goto out;
-    }
-
-    arg = strtok(NULL, " \t\n");
-    if (arg) {
-        control_packet.requesttype = strtol(arg, &endptr, 0);
-    }
-    if (!arg || *endptr != '\0') {
-        printf("Missing or invalid request type\n");
-        goto out;
-    }
-
-    arg = strtok(NULL, " \t\n");
-    if (arg) {
-        control_packet.value = strtol(arg, &endptr, 0);
-    }
-    if (!arg || *endptr != '\0') {
-        printf("Missing or invalid value\n");
-        goto out;
-    }
-
-    arg = strtok(NULL, " \t\n");
-    if (arg) {
-        control_packet.index = strtol(arg, &endptr, 0);
-    }
-    if (!arg || *endptr != '\0') {
-        printf("Missing or invalid index\n");
-        goto out;
-    }
-
-    arg = strtok(NULL, " \t\n");
-    if (arg) {
-        control_packet.length = strtol(arg, &endptr, 0);
-    }
-    if (!arg || *endptr != '\0') {
-        printf("Missing or invalid length\n");
-        goto out;
-    }
-
-    if (!(control_packet.endpoint & 0x80)) {
-        int i;
-
-        data = malloc(control_packet.length);
-        if (!data) {
-            fprintf(stderr, "Out of memory!\n");
-            close(info->fd);
-            info->fd= -1;
-            goto out;
-        }
-
-        for (i = 0; i < control_packet.length; i++) {
-            arg = strtok(NULL, " \t\n");
-            if (arg) {
-                data[i] = strtol(arg, &endptr, 0);
-            }
-            if (!arg || *endptr != '\0') {
-                printf("Missing or invalid data byte(s)\n");
-                free(data);
-                goto out;
-            }
-        }
-        data_len = control_packet.length;
-    } else {
-        data_len = 0;
-    }
     usbredirparser_send_control_packet(info->parser, info->id, &control_packet,
                                        data, data_len);
     if (data)
         free(data);
     printf("Sent control packet with id: %u\n", info->id);
     info->id++;
-out:
-    free(dup);
+}
+
+static void expect_ctrl(private_info_t *info, char *buf)
+{
+    if (info->expect_ctrl) {
+        fprintf(stderr, "Warning: discarding previous expect_ctrl\n");
+        if (info->expect_ctrl->data)
+            free(info->expect_ctrl->data);
+        free(info->expect_ctrl);
+    }
+
+    info->expect_ctrl = malloc(sizeof(*info->expect_ctrl));
+    if (parse_ctrl(buf, &info->expect_ctrl->ctrl,
+            &info->expect_ctrl->data, &info->expect_ctrl->data_len) < 0) {
+        free(info->expect_ctrl);
+        info->expect_ctrl = NULL;
+    }
+}
+
+static void usbredirtestserver_cmdline_expect(private_info_t *info, char *buf)
+{
+    if (strlen(buf) >= 5 && memcmp(buf, "ctrl ", 5) == 0)
+        expect_ctrl(info, buf + 5);
+
+    else
+        fprintf(stderr, "Error: we can only expect ctrl at the moment.\n");
 }
 
 static void usbredirtestserver_cmdline_device(private_info_t *info, char *buf)
 {
-    struct usb_redir_interface_info_header interface_info;
-    struct usb_redir_ep_info_header ep_info;
-    struct usb_redir_device_connect_header device_connect;
     int i;
 
-    memset(&device_connect, 0, sizeof(device_connect));
-    if (7 != sscanf(buf, "%hhx:%hhx:%hhx:%hhx %hx:%hx:%hx",
-        &device_connect.speed,
-        &device_connect.device_class,
-        &device_connect.device_subclass,
-        &device_connect.device_protocol,
+    memset(&info->device_connect, 0, sizeof(info->device_connect));
+    if (7 != sscanf(buf, "%hhx:%hhx:%hhx:%hhx:%hx:%hx:%hx",
+        &info->device_connect.speed,
+        &info->device_connect.device_class,
+        &info->device_connect.device_subclass,
+        &info->device_connect.device_protocol,
 
-        &device_connect.vendor_id,
-        &device_connect.product_id,
-        &device_connect.device_version_bcd)) {
+        &info->device_connect.vendor_id,
+        &info->device_connect.product_id,
+        &info->device_connect.device_version_bcd)) {
             fprintf(stderr, "Error: incorrect device specification.\n");
-            fprintf(stderr, "Provide speed:class:subclass:protocol ");
-            fprintf(stderr, " vendor:product:bcdver\n");
+            fprintf(stderr, "Provide speed:class:subclass:protocol:vendor:product:bcdver\n");
             fprintf(stderr, "All as hex strings.\n");
             return;
     }
 
-    memset(&interface_info, 0, sizeof(interface_info));
 
-    interface_info.interface_count = 4;
-    for (i = 0; i < 4; i++) {
-        interface_info.interface[i] = i;
-        interface_info.interface_class[i] = device_connect.device_class;
-        interface_info.interface_subclass[i] = device_connect.device_subclass;
-        interface_info.interface_protocol[i] = device_connect.device_protocol;
-    }
-
-    memset(&ep_info, 0, sizeof(ep_info));
-    ep_info.type[0] = 0;
-    ep_info.type[1] = 0 | 0x80;
-    ep_info.type[2] = 2;
-    ep_info.type[3] = 2 | 0x80;
-    for (i = 0; i < 4; i++) {
-        ep_info.interval[i] = 1; /* TODO */
-        ep_info.interface[i] = i; /* TODO */
-        ep_info.max_packet_size[i] = 64;
-        ep_info.max_streams[i] = 0; /* TODO */
-    }
-
-    usbredirparser_send_interface_info(info->parser, &interface_info);
-    usbredirparser_send_ep_info(info->parser, &ep_info);
-    usbredirparser_send_device_connect(info->parser, &device_connect);
-
+    usbredirparser_send_interface_info(info->parser, &info->interface_info);
+    usbredirparser_send_ep_info(info->parser, &info->ep_info);
+    usbredirparser_send_device_connect(info->parser, &info->device_connect);
 }
+
+static void usbredirtestserver_cmdline_endpoint(private_info_t *info, char *buf)
+{
+    int i;
+    uint8_t type;
+    uint8_t interval;
+    uint8_t interface;
+    uint16_t max_packet_size;
+    uint32_t max_streams;
+
+    memset(&info->device_connect, 0, sizeof(info->device_connect));
+    if (6 != sscanf(buf, "%d %hhx:%hhx:%hhx:%hx:%x",
+        &i, &type, &interval, &interface, &max_packet_size, &max_streams)) {
+            fprintf(stderr, "Error: incorrect endpoint specification.\n");
+            fprintf(stderr, "Provide type:interval:interface:max_packet_size:max_streams");
+            fprintf(stderr, "All as hex strings.\n");
+            return;
+    }
+
+    if (i >= 0 && i < 32) {
+        info->ep_info.type[i] = type;
+        info->ep_info.interval[i] = interval;
+        info->ep_info.interface[i] = interface;
+        info->ep_info.max_packet_size[i] = max_packet_size;
+        info->ep_info.max_streams[i] = max_streams;
+    }
+}
+
+static void usbredirtestserver_cmdline_interface(private_info_t *info, char *buf)
+{
+    int i;
+    uint8_t interface;
+    uint8_t class;
+    uint8_t subclass;
+    uint8_t protocol;
+
+    memset(&info->device_connect, 0, sizeof(info->device_connect));
+    if (5 != sscanf(buf, "%d %hhx:%hhx:%hhx:%hhx",
+        &i, &interface, &class, &subclass, &protocol)) {
+            fprintf(stderr, "Error: incorrect interface specification.\n");
+            fprintf(stderr, "Provide value:class:subclass:protocol");
+            fprintf(stderr, "All as hex strings.\n");
+            return;
+    }
+
+    if (i >= 0 && i < 32) {
+        if (info->interface_info.interface_count < (i + 1))
+            info->interface_info.interface_count = i + 1;
+        info->interface_info.interface[i] = interface;
+        info->interface_info.interface_class[i] = class;
+        info->interface_info.interface_subclass[i] = subclass;
+        info->interface_info.interface_protocol[i] = protocol;
+    }
+}
+
 
 static void usbredirtestserver_cmdline_parse(private_info_t *info, char *buf)
 {
     char *p;
     int len;
+
+    if (strlen(buf) == 0 || buf[0] == '#')
+        return;
 
     /* Compute length of first token */
     for (p = buf; *p && *p != ' ' && *p != '\t'; p++)
@@ -646,6 +696,21 @@ static void usbredirtestserver_cmdline_parse(private_info_t *info, char *buf)
 
     if (len <= 6 && !memcmp(buf, "device", len)) {
         usbredirtestserver_cmdline_device(info, p);
+        return;
+    }
+
+    if (len <= 6 && !memcmp(buf, "expect", len)) {
+        usbredirtestserver_cmdline_expect(info, p);
+        return;
+    }
+
+    if (len <= 8 && !memcmp(buf, "endpoint", len)) {
+        usbredirtestserver_cmdline_endpoint(info, p);
+        return;
+    }
+
+    if (len <= 9 && !memcmp(buf, "interface", len)) {
+        usbredirtestserver_cmdline_interface(info, p);
         return;
     }
 
@@ -721,14 +786,58 @@ static void usbredirtestserver_get_alt_setting(void *priv, uint64_t id,
 }
 
 
+static void check_expect_ctrl(private_info_t *info,
+            struct usb_redir_control_packet_header *ctrl,
+            uint8_t *data, int data_len)
+{
+    int i;
+
+    if (ctrl->endpoint != info->expect_ctrl->ctrl.endpoint ||
+        ctrl->request  != info->expect_ctrl->ctrl.request  ||
+        ctrl->requesttype  != info->expect_ctrl->ctrl.requesttype  ||
+        ctrl->status  != info->expect_ctrl->ctrl.status  ||
+        ctrl->value  != info->expect_ctrl->ctrl.value  ||
+        ctrl->index  != info->expect_ctrl->ctrl.index  ||
+        ctrl->length  != info->expect_ctrl->ctrl.length) {
+        fprintf(stderr, "Error: incoming control does not match expected.\n");
+        return;
+    }
+
+    if (data_len != info->expect_ctrl->data_len) {
+        fprintf(stderr, "Error: incoming control data_len %d does not match expected %d.\n",
+                data_len, info->expect_ctrl->data_len);
+        return;
+    }
+
+    for (i = 0; i < data_len; i++) {
+        if (data[i] != info->expect_ctrl->data[i]) {
+            fprintf(stderr, "Error: incoming data[%d] value %x does not match expected %x.\n",
+                i, data[i], info->expect_ctrl->data[i]);
+            return;
+        }
+    }
+
+    if (info->expect_ctrl->data)
+        free(info->expect_ctrl->data);
+    free(info->expect_ctrl);
+    info->expect_ctrl = NULL;
+}
+
 static void usbredirtestserver_control_packet(void *priv, uint64_t id,
     struct usb_redir_control_packet_header *control_packet,
     uint8_t *data, int data_len)
 {
     private_info_t *info = (private_info_t *) priv;
     int i;
-    printf("Control packet id: %"PRIu64", status: %d", id,
-           control_packet->status);
+    printf("Control packet id: %"PRIu64", status: %d - %x:%x:%x:%x:%x:%x:%x",
+            id, control_packet->status,
+            control_packet->endpoint,
+            control_packet->request,
+            control_packet->requesttype,
+            control_packet->status,
+            control_packet->value,
+            control_packet->index,
+            control_packet->length);
 
     if (data_len) {
         printf(", data:");
@@ -737,6 +846,10 @@ static void usbredirtestserver_control_packet(void *priv, uint64_t id,
         printf(" %02X", (unsigned int)data[i]);
     }
     printf("\n");
+
+    if (info->expect_ctrl)
+        check_expect_ctrl(info, control_packet, data, data_len);
+
     usbredirparser_free_packet_data(info->parser, data);
 }
 
