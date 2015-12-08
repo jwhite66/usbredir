@@ -21,9 +21,10 @@ void usage(const char *argv0)
 
 int connect_tcp(char *server, char *port)
 {
-    struct addrinfo hints, *res, *rp;
-    int rc;
-    int s;
+    struct addrinfo hints;
+    struct addrinfo *res = NULL, *rp;
+    int rc = 0;
+    int s = -1;
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -45,7 +46,8 @@ int connect_tcp(char *server, char *port)
         if (s < 0)
         {
             perror("socket");
-            return -2;
+            s = -2;
+            goto exit;
         }
 
         if (connect(s, rp->ai_addr, rp->ai_addrlen) == 0)
@@ -56,9 +58,11 @@ int connect_tcp(char *server, char *port)
     if (! rp)
     {
         fprintf(stderr, "Error: unable to connect.\n");
-        return -3;
+        close(s);
+        s = -3;
     }
 
+exit:
     freeaddrinfo(res);
 
     return s;
@@ -83,6 +87,7 @@ int connect_unix(char *fname)
     if (connect(s, (struct sockaddr *) &addr, sizeof(addr)) != 0)
     {
         perror("connect");
+        close(s);
         return -1;
     }
 
@@ -167,6 +172,7 @@ int main(int argc, char *argv[])
         if (write(fd, buf, strlen(buf)) < 0)
         {
             fprintf(stderr, "Attach of '%s' to kernel failed\n", buf);
+            close(fd);
             exit(1);
         }
         close(fd);
