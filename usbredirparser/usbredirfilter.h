@@ -21,8 +21,10 @@
 #ifndef __USBREDIRFILTER_H
 #define __USBREDIRFILTER_H
 
+#if ! defined(__KERNEL__)
 #include <stdio.h>
 #include <stdint.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {

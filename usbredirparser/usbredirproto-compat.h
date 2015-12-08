@@ -40,7 +40,9 @@
 
 #endif
 
+#if ! defined(__KERNEL__)
 #include <stdint.h>
+#endif
 
 struct usb_redir_device_connect_header_no_device_version {
     uint8_t speed;

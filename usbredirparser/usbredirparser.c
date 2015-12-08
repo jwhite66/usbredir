@@ -18,12 +18,20 @@
    You should have received a copy of the GNU Lesser General Public
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
+#if defined(__KERNEL__)
+#include <linux/kernel.h>
+#include <linux/string.h>
+#include <linux/types.h>
+#include <linux/slab.h>
+#else
 #include "config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#endif
+
 #include "usbredirproto-compat.h"
 #include "usbredirparser.h"
 #include "usbredirfilter.h"

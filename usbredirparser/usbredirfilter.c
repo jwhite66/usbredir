@@ -19,9 +19,14 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
+#if defined(__KERNEL__)
+#include <linux/string.h>
+#include <linux/slab.h>
+#else
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#endif
 
 #ifdef WIN32
 #include "strtok_r.h"

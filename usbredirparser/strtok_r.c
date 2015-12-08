@@ -21,7 +21,11 @@
 # include <config.h>
 #endif
 
+#if defined(__KERNEL__)
+#include <linux/string.h>
+#else
 #include <string.h>
+#endif
 
 /* Parse S into tokens separated by characters in DELIM.
    If S is NULL, the saved pointer in SAVE_PTR is used as

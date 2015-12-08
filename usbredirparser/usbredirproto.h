@@ -40,7 +40,9 @@
 
 #endif
 
+#if ! defined(__KERNEL__)
 #include <stdint.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
