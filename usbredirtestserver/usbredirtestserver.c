@@ -38,7 +38,9 @@
 #include <sys/time.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <sys/un.h>
 #include <sys/wait.h>
+#include <libgen.h>
 
 #include "usbredirparser.h"
 
@@ -132,8 +134,10 @@ typedef struct {
 
 static const struct option longopts[] = {
     { "port", required_argument, NULL, 'p' },
+    { "socket", required_argument, NULL, 'u' },
     { "verbose", required_argument, NULL, 'v' },
     { "script", required_argument, NULL, 's' },
+    { "one-shot", no_argument, NULL, 'o' },
     { "help", no_argument, NULL, 'h' },
     { NULL, 0, NULL, 0 }
 };
@@ -184,8 +188,12 @@ static int usbredirtestserver_write(void *priv, uint8_t *data, int count)
 static void usage(int exit_code, char *argv0)
 {
     fprintf(exit_code? stderr:stdout,
-        "Usage: %s [-p|--port <port>] [-v|--verbose <0-3>] [-s|--script <script-file>] <server>\n",
-        argv0);
+        "Usage: %s [options] <server> [-p|--port <port>]\n"
+        "       - or - \n"
+        "       %s [options] -u|--socket <file>\n"
+        " where [options] are:\n"
+        "       [-v|--verbose <0-3>] [-s|--script <script-file>] [--one-shot]\n",
+        basename(argv0), basename(argv0));
     exit(exit_code);
 }
 
@@ -359,8 +367,11 @@ int main(int argc, char *argv[])
     int server_fd, client_fd;
     int on = 1;
     struct sockaddr_in serveraddr;
+    struct sockaddr_un unixaddr;
     int id = 0;
     char *script_file = NULL;
+    char *socket_file = NULL;
+    int oneshot = 0;
 
     while ((o = getopt_long(argc, argv, "hp:s:v:", longopts, NULL)) != -1) {
         switch (o) {
@@ -385,6 +396,16 @@ int main(int argc, char *argv[])
                 usage(1, argv[0]);
             }
             break;
+        case 'u':
+            socket_file = strdup(optarg);
+            if (strlen(socket_file) - 1 > sizeof(unixaddr.sun_path)) {
+                fprintf(stderr, "Socket name too long\n");
+                usage(1, argv[0]);
+            }
+            break;
+        case 'o':
+            oneshot = 1;
+            break;
         case '?':
         case 'h':
             usage(o == '?', argv[0]);
@@ -397,25 +418,41 @@ int main(int argc, char *argv[])
         usage(1, argv[0]);
     }
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_file)
+        server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    else
+        server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
     if (server_fd == -1) {
         perror("Error creating socket");
         exit(1);
     }
 
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on))) {
-        perror("Error setsockopt(SO_REUSEADDR) failed");
-        exit(1);
+    if (socket_file) {
+        memset(&unixaddr, 0, sizeof(unixaddr));
+        unixaddr.sun_family = AF_UNIX;
+        strncpy(unixaddr.sun_path, socket_file, sizeof(unixaddr.sun_path) - 1);
+
+        if (bind(server_fd, (struct sockaddr *)&unixaddr, sizeof(unixaddr))) {
+            fprintf(stderr, "Error binding to file %s: %s\n", socket_file, strerror(errno));
+            exit(1);
+        }
     }
+    else {
+        if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on))) {
+            perror("Error setsockopt(SO_REUSEADDR) failed");
+            exit(1);
+        }
 
-    memset(&serveraddr, 0, sizeof(serveraddr));
-    serveraddr.sin_family = AF_INET;
-    serveraddr.sin_port   = htons(port);
-    serveraddr.sin_addr.s_addr = INADDR_ANY;
+        memset(&serveraddr, 0, sizeof(serveraddr));
+        serveraddr.sin_family = AF_INET;
+        serveraddr.sin_port   = htons(port);
+        serveraddr.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(server_fd, (struct sockaddr *)&serveraddr, sizeof(serveraddr))) {
-        fprintf(stderr, "Error binding port %d: %s\n", port, strerror(errno));
-        exit(1);
+        if (bind(server_fd, (struct sockaddr *)&serveraddr, sizeof(serveraddr))) {
+            fprintf(stderr, "Error binding port %d: %s\n", port, strerror(errno));
+            exit(1);
+        }
     }
 
     if (listen(server_fd, 1)) {
@@ -452,7 +489,7 @@ int main(int argc, char *argv[])
             }
 
             id++;
-            if (fork() == 0)
+            if (oneshot || fork() == 0)
                 run_one_device(client_fd, script_file, id);
             else
                 close(client_fd);
