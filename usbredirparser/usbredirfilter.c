@@ -28,7 +28,7 @@
 #include <errno.h>
 #endif
 
-#ifdef WIN32
+#if defined(WIN32) || defined(__KERNEL__)
 #include "strtok_r.h"
 #define strtok_r  glibc_strtok_r
 #endif
