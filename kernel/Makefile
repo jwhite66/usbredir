@@ -1,7 +1,8 @@
 includes := -I$(PWD)/../usbredirparser/
 
 MODULE_VERSION ?= $(shell uname -r)
-install_target := $(DESTDIR)/lib/modules/$(MODULE_VERSION)/kernel/drivers/usb/misc/
+modules_target := $(DESTDIR)/lib/modules/$(MODULE_VERSION)/kernel/drivers/usb/misc/
+sysconfig_target := $(DESTDIR)/etc/sysconfig/modules/
 
 INSTALL_PROGRAM ?= install
 
@@ -14,8 +15,10 @@ usbredir.ko:
 clean:
 	make ccflags-y="${includes}" -C /lib/modules/$(MODULE_VERSION)/build/ M=$(PWD) clean
 
-install: usbredir.ko
-	mkdir -p $(install_target)
-	$(INSTALL_PROGRAM) usbredir.ko $(install_target)
+install: usbredir.ko usbredir.modules
+	mkdir -p $(modules_target)
+	$(INSTALL_PROGRAM) usbredir.ko $(modules_target)
+	mkdir -p $(sysconfig_target)
+	$(INSTALL_PROGRAM) usbredir.modules $(sysconfig_target)
 
 all: usbredir.ko

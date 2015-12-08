@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+#   usbredir.module
+#       Load the XSpice USB redirection kernel module.
+#
+
+# Set ENABLED to 1 to load this module at boot.
+ENABLED=0
+
+# Uncomment and set these to set module parameters as desired
+
+# List of USB Vendor and Device IDs permitted to connect
+#WHITELIST="VVVV:DDDD;VVVV:DDDD"
+
+# List of USB Vendor and Device IDs not allowed
+#BLACKLIST="VVVV:DDDD;VVVV:DDDD"
+
+# Maximum virtual hubs to create
+#MAX_HUBS=64
+
+# Maximum virtual devices per virtual hub to create
+#DEVICES_PER_HUB=16
+
+if [ $ENABLED -gt 0 ] ; then
+    [ -z "$WHITELIST" ]       || whitelist="whitelist=$WHITELIST"
+    [ -z "$BLACKLIST" ]       || blacklist="blacklist=$BLACKLIST"
+    [ -z "$MAX_HUBS" ]        || max_hubs="max_hubs=$MAX_HUBS"
+    [ -z "$DEVICES_PER_HUB" ] || devices_per_hub="devices_per_hub=$DEVICES_PER_HUB"
+    exec modprobe usbredir "$whitelist" "$blacklist" "$max_hubs" "$devices_per_hub" >/dev/null 2>&1
+fi
