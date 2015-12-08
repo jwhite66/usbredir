@@ -116,20 +116,20 @@ static void serialize_test(struct usbredirparser *parser_pub)
     wbuf = parser->write_buf;
     while (wbuf) {
         next_wbuf = wbuf->next;
-        free(wbuf->buf);
-        free(wbuf);
+        usbredirparser_free(wbuf->buf);
+        usbredirparser_free(wbuf);
         wbuf = next_wbuf;
     }
     parser->write_buf = NULL;
     parser->write_buf_count = 0;
 
-    free(parser->data);
+    usbredirparser_free(parser->data);
     parser->data = NULL;
 
     parser->type_header_len = parser->data_len = parser->have_peer_caps = 0;
 
     usbredirparser_unserialize(parser_pub, data, len);
-    free(data);
+    usbredirparser_free(data);
 }
 #endif
 
@@ -140,7 +140,7 @@ static int usbredirparser_caps_get_cap(struct usbredirparser_priv *parser,
 
 struct usbredirparser *usbredirparser_create(void)
 {
-    return calloc(1, sizeof(struct usbredirparser_priv));
+    return usbredirparser_calloc(1, sizeof(struct usbredirparser_priv));
 }
 
 static void usbredirparser_verify_caps(struct usbredirparser_priv *parser,
@@ -193,15 +193,15 @@ void usbredirparser_destroy(struct usbredirparser *parser_pub)
     wbuf = parser->write_buf;
     while (wbuf) {
         next_wbuf = wbuf->next;
-        free(wbuf->buf);
-        free(wbuf);
+        usbredirparser_free(wbuf->buf);
+        usbredirparser_free(wbuf);
         wbuf = next_wbuf;
     }
 
     if (parser->lock)
         parser->callb.free_lock_func(parser->lock);
 
-    free(parser);
+    usbredirparser_free(parser);
 }
 
 static int usbredirparser_caps_get_cap(struct usbredirparser_priv *parser,
@@ -278,7 +278,7 @@ static void usbredirparser_handle_hello(struct usbredirparser *parser_pub,
     }
     usbredirparser_verify_caps(parser, parser->peer_caps, "peer");
     parser->have_peer_caps = 1;
-    free(data);
+    usbredirparser_free(data);
 
     INFO("Peer version: %s, using %d-bits ids", buf,
          usbredirparser_using_32bits_ids(parser_pub) ? 32 : 64);
@@ -1006,7 +1006,7 @@ int usbredirparser_do_read(struct usbredirparser *parser_pub)
                 }
                 data_len = parser->header.length - type_header_len;
                 if (data_len) {
-                    parser->data = malloc(data_len);
+                    parser->data = usbredirparser_malloc(data_len);
                     if (!parser->data) {
                         ERROR("Out of memory allocating data buffer");
                         parser->to_skip = parser->header.length;
@@ -1079,8 +1079,8 @@ int usbredirparser_do_write(struct usbredirparser *parser_pub)
         if (wbuf->pos == wbuf->len) {
             parser->write_buf = wbuf->next;
             if (!(parser->flags & usbredirparser_fl_write_cb_owns_buffer))
-                free(wbuf->buf);
-            free(wbuf);
+                usbredirparser_free(wbuf->buf);
+            usbredirparser_free(wbuf);
             parser->write_buf_count--;
         }
     }
@@ -1091,13 +1091,13 @@ int usbredirparser_do_write(struct usbredirparser *parser_pub)
 void usbredirparser_free_write_buffer(struct usbredirparser *parser,
     uint8_t *data)
 {
-    free(data);
+    usbredirparser_free(data);
 }
 
 void usbredirparser_free_packet_data(struct usbredirparser *parser,
     uint8_t *data)
 {
-    free(data);
+    usbredirparser_free(data);
 }
 
 static void usbredirparser_queue(struct usbredirparser *parser_pub,
@@ -1124,11 +1124,11 @@ static void usbredirparser_queue(struct usbredirparser *parser_pub,
         return;
     }
 
-    new_wbuf = calloc(1, sizeof(*new_wbuf));
-    buf = malloc(header_len + type_header_len + data_len);
+    new_wbuf = usbredirparser_calloc(1, sizeof(*new_wbuf));
+    buf = usbredirparser_malloc(header_len + type_header_len + data_len);
     if (!new_wbuf || !buf) {
         ERROR("Out of memory allocating buffer to send packet, dropping!");
-        free(new_wbuf); free(buf);
+        usbredirparser_free(new_wbuf); usbredirparser_free(buf);
         return;
     }
 
@@ -1345,7 +1345,7 @@ void usbredirparser_send_filter_filter(struct usbredirparser *parser_pub,
     }
     usbredirparser_queue(parser_pub, usb_redir_filter_filter, 0, NULL,
                          (uint8_t *)str, strlen(str) + 1);
-    free(str);
+    usbredirparser_free(str);
 }
 
 void usbredirparser_send_start_bulk_receiving(struct usbredirparser *parser,
@@ -1456,9 +1456,9 @@ static int serialize_alloc(struct usbredirparser_priv *parser,
     size = (used + needed + USBREDIRPARSER_SERIALIZE_BUF_SIZE - 1) &
            ~(USBREDIRPARSER_SERIALIZE_BUF_SIZE - 1);
 
-    *state = realloc(*state, size);
+    *state = usbredirparser_realloc(*state, size);
     if (!*state) {
-        free(old_state);
+        usbredirparser_free(old_state);
         ERROR("Out of memory allocating serialization buffer");
         return -1;
     }
@@ -1548,7 +1548,7 @@ static int unserialize_data(struct usbredirparser_priv *parser,
         return -1;
     }
     if (*data == NULL && len > 0) {
-        *data = malloc(len);
+        *data = usbredirparser_malloc(len);
         if (!*data) {
             ERROR("Out of memory allocating unserialize buffer");
             return -1;
@@ -1744,7 +1744,7 @@ int usbredirparser_unserialize(struct usbredirparser *parser_pub,
     parser->type_header_read = i;
 
     if (parser->data_len) {
-        parser->data = malloc(parser->data_len);
+        parser->data = usbredirparser_malloc(parser->data_len);
         if (!parser->data) {
             ERROR("Out of memory allocating unserialize buffer");
             return -1;
@@ -1760,7 +1760,7 @@ int usbredirparser_unserialize(struct usbredirparser *parser_pub,
         return -1;
     next = &parser->write_buf;
     while (i) {
-        wbuf = calloc(1, sizeof(*wbuf));
+        wbuf = usbredirparser_calloc(1, sizeof(*wbuf));
         if (!wbuf) {
             ERROR("Out of memory allocating unserialize buffer");
             return -1;

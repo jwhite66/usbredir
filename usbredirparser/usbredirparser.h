@@ -23,6 +23,20 @@
 
 #include "usbredirproto.h"
 
+#if defined(__KERNEL__)
+#define usbredirparser_calloc(a, b)    kcalloc((a), (b), GFP_KERNEL)
+#define usbredirparser_malloc(a)       kmalloc((a), GFP_KERNEL)
+#define usbredirparser_strdup(a)       kstrdup((a), GFP_KERNEL)
+#define usbredirparser_realloc(a, b)   krealloc((a), (b), GFP_KERNEL)
+#define usbredirparser_free kfree
+#else
+#define usbredirparser_calloc          calloc
+#define usbredirparser_malloc          malloc
+#define usbredirparser_strdup          strdup
+#define usbredirparser_realloc         realloc
+#define usbredirparser_free            free
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

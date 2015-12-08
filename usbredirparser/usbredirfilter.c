@@ -28,6 +28,7 @@
 #define strtok_r  glibc_strtok_r
 #endif
 
+#include "usbredirparser.h"
 #include "usbredirfilter.h"
 
 int usbredirfilter_string_to_rules(
@@ -56,12 +57,12 @@ int usbredirfilter_string_to_rules(
         rules_count++;
     }
 
-    rules = calloc(rules_count, sizeof(struct usbredirfilter_rule));
+    rules = usbredirparser_calloc(rules_count, sizeof(struct usbredirfilter_rule));
     if (!rules)
         return -ENOMEM;
 
     /* Make a copy since strtok mangles the string */
-    buf = strdup(filter_str);
+    buf = usbredirparser_strdup(filter_str);
     if (!buf) {
         ret = -ENOMEM;
         goto leave;
@@ -94,8 +95,8 @@ int usbredirfilter_string_to_rules(
 
 leave:
     if (ret)
-        free(rules);
-    free(buf);
+        usbredirparser_free(rules);
+    usbredirparser_free(buf);
     return ret;
 }
 
@@ -109,7 +110,7 @@ char *usbredirfilter_rules_to_string(const struct usbredirfilter_rule *rules,
         return NULL;
 
     /* We need 28 bytes per rule in the worst case */
-    str = malloc(28 * rules_count + 1);
+    str = usbredirparser_malloc(28 * rules_count + 1);
     if (!str)
         return NULL;
 
