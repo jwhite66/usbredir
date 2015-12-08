@@ -69,6 +69,28 @@ static void usbredirtestserver_iso_packet(void *priv, uint64_t id,
 static void usbredirtestserver_interrupt_packet(void *priv, uint64_t id,
     struct usb_redir_interrupt_packet_header *interrupt_packet,
     uint8_t *data, int data_len);
+static void usbredirtestserver_start_iso_stream(void *priv,
+    uint64_t id, struct usb_redir_start_iso_stream_header *start_iso_stream);
+static void usbredirtestserver_stop_iso_stream(void *priv,
+    uint64_t id, struct usb_redir_stop_iso_stream_header *stop_iso_stream);
+static void usbredirtestserver_start_interrupt_receiving(void *priv,
+    uint64_t id, struct usb_redir_start_interrupt_receiving_header *start_interrupt_receiving);
+static void usbredirtestserver_stop_interrupt_receiving(void *priv,
+    uint64_t id, struct usb_redir_stop_interrupt_receiving_header *stop_interrupt_receiving);
+static void usbredirtestserver_alloc_bulk_streams(void *priv,
+    uint64_t id, struct usb_redir_alloc_bulk_streams_header *alloc_bulk_streams);
+static void usbredirtestserver_free_bulk_streams(void *priv,
+    uint64_t id, struct usb_redir_free_bulk_streams_header *free_bulk_streams);
+static void usbredirtestserver_cancel_data_packet(void *priv, uint64_t id);
+static void usbredirtestserver_filter_reject(void *priv);
+static void usbredirtestserver_filter_filter(void *priv,
+    struct usbredirfilter_rule *rules, int rules_count);
+static void usbredirtestserver_device_disconnect_ack(void *priv);
+static void usbredirtestserver_start_bulk_receiving(void *priv,
+    uint64_t id, struct usb_redir_start_bulk_receiving_header *start_bulk_receiving);
+static void usbredirtestserver_stop_bulk_receiving(void *priv,
+    uint64_t id, struct usb_redir_stop_bulk_receiving_header *stop_bulk_receiving);
+
 
 static int verbose = usbredirparser_info; /* 2 */
 static int running = 1;
@@ -286,9 +308,6 @@ void run_one_device(int fd, char *script_file, int id)
     parser->set_configuration_func = usbredirtestserver_set_configuration;
     parser->set_alt_setting_func = usbredirtestserver_set_alt_setting;
     parser->get_alt_setting_func = usbredirtestserver_get_alt_setting;
-
-/*
-    TODO: These functions are what the host program also supports
     parser->start_iso_stream_func = usbredirtestserver_start_iso_stream;
     parser->stop_iso_stream_func = usbredirtestserver_stop_iso_stream;
     parser->start_interrupt_receiving_func =
@@ -306,7 +325,6 @@ void run_one_device(int fd, char *script_file, int id)
         usbredirtestserver_start_bulk_receiving;
     parser->stop_bulk_receiving_func =
         usbredirtestserver_stop_bulk_receiving;
-*/
 
     /* TODO - usbredirserver can do this; not sure if we want to..
     if (flags & usbredirhost_fl_write_cb_owns_buffer) {
@@ -981,4 +999,67 @@ static void free_command_buffer(command_buffer_t *cmd)
         if (cmd->labels[i])
             free(cmd->labels[i]);
     free(cmd);
+}
+
+#define TODO_UNIMPLEMENTED fprintf(stderr, "Error: %s not implemented.\n", __FUNCTION__)
+static void usbredirtestserver_start_iso_stream(void *priv,
+    uint64_t id, struct usb_redir_start_iso_stream_header *start_iso_stream)
+{
+    TODO_UNIMPLEMENTED;
+}
+
+static void usbredirtestserver_stop_iso_stream(void *priv,
+    uint64_t id, struct usb_redir_stop_iso_stream_header *stop_iso_stream)
+{
+    TODO_UNIMPLEMENTED;
+}
+
+static void usbredirtestserver_start_interrupt_receiving(void *priv,
+    uint64_t id, struct usb_redir_start_interrupt_receiving_header *start_interrupt_receiving)
+{
+    TODO_UNIMPLEMENTED;
+}
+
+static void usbredirtestserver_stop_interrupt_receiving(void *priv,
+    uint64_t id, struct usb_redir_stop_interrupt_receiving_header *stop_interrupt_receiving)
+{
+    TODO_UNIMPLEMENTED;
+}
+
+static void usbredirtestserver_alloc_bulk_streams(void *priv,
+    uint64_t id, struct usb_redir_alloc_bulk_streams_header *alloc_bulk_streams)
+{
+    TODO_UNIMPLEMENTED;
+}
+static void usbredirtestserver_free_bulk_streams(void *priv,
+    uint64_t id, struct usb_redir_free_bulk_streams_header *free_bulk_streams)
+{
+    TODO_UNIMPLEMENTED;
+}
+static void usbredirtestserver_cancel_data_packet(void *priv, uint64_t id)
+{
+    TODO_UNIMPLEMENTED;
+}
+static void usbredirtestserver_filter_reject(void *priv)
+{
+    TODO_UNIMPLEMENTED;
+}
+static void usbredirtestserver_filter_filter(void *priv,
+    struct usbredirfilter_rule *rules, int rules_count)
+{
+    TODO_UNIMPLEMENTED;
+}
+static void usbredirtestserver_device_disconnect_ack(void *priv)
+{
+    TODO_UNIMPLEMENTED;
+}
+static void usbredirtestserver_start_bulk_receiving(void *priv,
+    uint64_t id, struct usb_redir_start_bulk_receiving_header *start_bulk_receiving)
+{
+    TODO_UNIMPLEMENTED;
+}
+static void usbredirtestserver_stop_bulk_receiving(void *priv,
+    uint64_t id, struct usb_redir_stop_bulk_receiving_header *stop_bulk_receiving)
+{
+    TODO_UNIMPLEMENTED;
 }
