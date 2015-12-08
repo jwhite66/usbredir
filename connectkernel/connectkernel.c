@@ -94,12 +94,14 @@ int connect_unix(char *fname)
     return s;
 }
 
+#define MAX_DEVID_LENGTH            256
+#define MAX_PRINTED_SOCKET_LENGTH     8
 int main(int argc, char *argv[])
 {
         int s;
         int fd;
         int i;
-        char buf[256 + 8];
+        char buf[MAX_DEVID_LENGTH + MAX_PRINTED_SOCKET_LENGTH + 1];
         char *attach_file = "/sys/bus/platform/drivers/usbredir/attach";
         char *devid = NULL;
         char *server = NULL;
@@ -149,6 +151,13 @@ int main(int argc, char *argv[])
         if (!devid || (socket && !server) || (!socket && (!server || !port)))
         {
             fprintf(stderr, "Error: specify device id, and then server and port or --socket\n");
+            usage(argv[0]);
+            exit(1);
+        }
+
+        if (strlen(devid) > MAX_DEVID_LENGTH)
+        {
+            fprintf(stderr, "Error: device id length greater than %d\n", MAX_DEVID_LENGTH);
             usage(argv[0]);
             exit(1);
         }
