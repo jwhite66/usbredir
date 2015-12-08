@@ -36,11 +36,29 @@
 #include "usbredirparser.h"
 #include "usbredirfilter.h"
 
+int filter_strtoi(char *str, int *res)
+{
+    long l;
+    int rc = 0;
+#if defined(__KERNEL__)
+    rc = kstrtol(str, 0, &l);
+#else
+    char *ep;
+
+    l = strtol(str, &ep, 0);
+    if (*ep)
+        rc = -1;
+#endif
+    if (rc == 0)
+        *res = (int) l;
+    return rc;
+}
+
 int usbredirfilter_string_to_rules(
     const char *filter_str, const char *token_sep, const char *rule_sep,
     struct usbredirfilter_rule **rules_ret, int *rules_count_ret)
 {
-    char *rule, *rule_saveptr, *token, *token_saveptr, *ep;
+    char *rule, *rule_saveptr, *token, *token_saveptr;
     struct usbredirfilter_rule *rules = NULL;
     int i, rules_count, *values, ret = 0;
     char *buf = NULL;
@@ -81,9 +99,8 @@ int usbredirfilter_string_to_rules(
         values = (int *)&rules[rules_count];
         token = strtok_r(rule, token_sep, &token_saveptr);
         for (i = 0; i < 5 && token; i++) {
-            values[i] = strtol(token, &ep, 0);
-            if (*ep)
-                break;
+	    if (filter_strtoi(token, &values[i]))
+	        break;
             token = strtok_r(NULL, token_sep, &token_saveptr);
         }
         if (i != 5 || token != NULL ||
