@@ -107,7 +107,7 @@ va_log(struct usbredirparser_priv *parser, int verbose, const char *fmt, ...)
 #define ERROR(...)   va_log(parser, usbredirparser_error, __VA_ARGS__)
 #define WARNING(...) va_log(parser, usbredirparser_warning, __VA_ARGS__)
 #define INFO(...)    va_log(parser, usbredirparser_info, __VA_ARGS__)
-#define DEBUG(...)    va_log(parser, usbredirparser_debug, __VA_ARGS__)
+#define DEBUGMSG(...)    va_log(parser, usbredirparser_debug, __VA_ARGS__)
 
 #if 0 /* Can be enabled and called from random place to test serialization */
 static void serialize_test(struct usbredirparser *parser_pub)
@@ -1481,7 +1481,7 @@ static int serialize_int(struct usbredirparser_priv *parser,
                          uint8_t **state, uint8_t **pos, uint32_t *remain,
                          uint32_t val, const char *desc)
 {
-    DEBUG("serializing int %08x : %s", val, desc);
+    DEBUGMSG("serializing int %08x : %s", val, desc);
 
     if (serialize_alloc(parser, state, pos, remain, sizeof(uint32_t)))
         return -1;
@@ -1505,7 +1505,7 @@ static int unserialize_int(struct usbredirparser_priv *parser,
     *pos += sizeof(uint32_t);
     *remain -= sizeof(uint32_t);
 
-    DEBUG("unserialized int %08x : %s", *val, desc);
+    DEBUGMSG("unserialized int %08x : %s", *val, desc);
 
     return 0;
 }
@@ -1514,9 +1514,9 @@ static int serialize_data(struct usbredirparser_priv *parser,
                           uint8_t **state, uint8_t **pos, uint32_t *remain,
                           uint8_t *data, uint32_t len, const char *desc)
 {
-    DEBUG("serializing %d bytes of %s data", len, desc);
+    DEBUGMSG("serializing %d bytes of %s data", len, desc);
     if (len >= 8)
-        DEBUG("First 8 bytes of %s: %02x %02x %02x %02x %02x %02x %02x %02x",
+        DEBUGMSG("First 8 bytes of %s: %02x %02x %02x %02x %02x %02x %02x %02x",
               desc, data[0], data[1], data[2], data[3],
                     data[4], data[5], data[6], data[7]);
 
@@ -1573,9 +1573,9 @@ static int unserialize_data(struct usbredirparser_priv *parser,
     *remain -= len;
     *len_in_out = len;
 
-    DEBUG("unserialized %d bytes of %s data", len, desc);
+    DEBUGMSG("unserialized %d bytes of %s data", len, desc);
     if (len >= 8)
-        DEBUG("First 8 bytes of %s: %02x %02x %02x %02x %02x %02x %02x %02x",
+        DEBUGMSG("First 8 bytes of %s: %02x %02x %02x %02x %02x %02x %02x %02x",
               desc, (*data)[0], (*data)[1], (*data)[2], (*data)[3],
               (*data)[4], (*data)[5], (*data)[6], (*data)[7]);
 
