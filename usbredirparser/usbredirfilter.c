@@ -243,6 +243,7 @@ int usbredirfilter_verify(
     return 0;
 }
 
+#if ! defined(__KERNEL__)
 void usbredirfilter_print(
     const struct usbredirfilter_rule *rules, int rules_count, FILE *out)
 {
@@ -278,3 +279,4 @@ void usbredirfilter_print(
                 product, version, rules[i].allow ? "Allow":"Block");
     }
 }
+#endif

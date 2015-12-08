@@ -131,9 +131,11 @@ int usbredirfilter_check(
 int usbredirfilter_verify(
     const struct usbredirfilter_rule *rules, int rules_count);
 
+#if ! defined(__KERNEL__)
 /* Print the passed in rules to FILE out in human readable format */
 void usbredirfilter_print(
     const struct usbredirfilter_rule *rules, int rules_count, FILE *out);
+#endif
 
 #ifdef __cplusplus
 }
